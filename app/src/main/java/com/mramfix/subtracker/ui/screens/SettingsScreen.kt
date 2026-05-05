@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -40,12 +41,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.mramfix.subtracker.domain.model.AppThemeMode
 import com.mramfix.subtracker.domain.model.CurrencyCode
 import com.mramfix.subtracker.domain.model.NotificationLead
@@ -65,6 +69,7 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     var pendingExport by remember { mutableStateOf<String?>(null) }
+    var pendingGoogleAction by remember { mutableStateOf<GoogleAction?>(null) }
     val createDocument = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
         val json = pendingExport ?: return@rememberLauncherForActivityResult
         if (uri != null) {
@@ -77,6 +82,14 @@ fun SettingsScreen(
             val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
             if (text != null) viewModel.importJson(text)
         }
+    }
+    val googleSignIn = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        when (pendingGoogleAction) {
+            GoogleAction.EXPORT -> viewModel.exportToGoogle(result.data)
+            GoogleAction.IMPORT -> viewModel.importFromGoogle(result.data)
+            null -> Unit
+        }
+        pendingGoogleAction = null
     }
     LaunchedEffect(state.message) {
         state.message?.let {
@@ -181,6 +194,49 @@ fun SettingsScreen(
                 Icon(Icons.Default.FileUpload, contentDescription = null)
                 Text("Импортировать JSON")
             }
+            Button(
+                onClick = {
+                    pendingGoogleAction = GoogleAction.EXPORT
+                    googleSignIn.launch(viewModel.googleSignInIntent())
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                GoogleFavicon()
+                Text("Экспорт через Google")
+            }
+            OutlinedButton(
+                onClick = {
+                    pendingGoogleAction = GoogleAction.IMPORT
+                    googleSignIn.launch(viewModel.googleSignInIntent())
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                GoogleFavicon()
+                Text("Импорт через Google")
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Автоматическая синхронизация", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = if (state.googleSignedIn) {
+                            "Экспортировать backup в Google Drive после изменений подписок"
+                        } else {
+                            "Доступно после входа через Google"
+                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Switch(
+                    checked = state.settings.autoGoogleSyncEnabled && state.googleSignedIn,
+                    onCheckedChange = viewModel::updateAutoGoogleSyncEnabled,
+                    enabled = state.googleSignedIn
+                )
+            }
             HorizontalDivider(modifier = Modifier.padding(top = 10.dp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
                 Text("О приложении", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -193,4 +249,25 @@ fun SettingsScreen(
             }
         }
     }
+}
+
+@Composable
+private fun GoogleFavicon() {
+    val context = LocalContext.current
+    SubcomposeAsyncImage(
+        model = ImageRequest.Builder(context)
+            .data("https://www.google.com/favicon.ico")
+            .crossfade(true)
+            .build(),
+        contentDescription = null,
+        modifier = Modifier
+            .padding(end = 8.dp)
+            .size(18.dp),
+        contentScale = ContentScale.Fit
+    )
+}
+
+private enum class GoogleAction {
+    EXPORT,
+    IMPORT
 }

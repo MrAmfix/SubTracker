@@ -9,5 +9,6 @@ data class AppSettings(
     val notificationLead: NotificationLead = NotificationLead.ONE_DAY,
     val baseCurrency: CurrencyCode = CurrencyCode.RUB,
     val salaryDay: Int = 5,
-    val advanceDay: Int = 20
+    val advanceDay: Int = 20,
+    val autoGoogleSyncEnabled: Boolean = false
 )

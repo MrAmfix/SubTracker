@@ -25,7 +25,8 @@ class SettingsDataStore(private val context: Context) {
             } ?: NotificationLead.ONE_DAY,
             baseCurrency = preferences[Keys.baseCurrency]?.let(CurrencyCode::valueOf) ?: CurrencyCode.RUB,
             salaryDay = preferences[Keys.salaryDay]?.coerceIn(1, 31) ?: 5,
-            advanceDay = preferences[Keys.advanceDay]?.coerceIn(1, 31) ?: 20
+            advanceDay = preferences[Keys.advanceDay]?.coerceIn(1, 31) ?: 20,
+            autoGoogleSyncEnabled = preferences[Keys.autoGoogleSyncEnabled] ?: false
         )
     }
 
@@ -53,6 +54,10 @@ class SettingsDataStore(private val context: Context) {
         context.settingsDataStore.edit { it[Keys.advanceDay] = day.coerceIn(1, 31) }
     }
 
+    suspend fun updateAutoGoogleSyncEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.autoGoogleSyncEnabled] = enabled }
+    }
+
     suspend fun replace(settings: AppSettings) {
         context.settingsDataStore.edit {
             it[Keys.themeMode] = settings.themeMode.name
@@ -61,6 +66,7 @@ class SettingsDataStore(private val context: Context) {
             it[Keys.baseCurrency] = settings.baseCurrency.name
             it[Keys.salaryDay] = settings.salaryDay.coerceIn(1, 31)
             it[Keys.advanceDay] = settings.advanceDay.coerceIn(1, 31)
+            it[Keys.autoGoogleSyncEnabled] = settings.autoGoogleSyncEnabled
         }
     }
 
@@ -71,5 +77,6 @@ class SettingsDataStore(private val context: Context) {
         val baseCurrency = stringPreferencesKey("base_currency")
         val salaryDay = intPreferencesKey("salary_day")
         val advanceDay = intPreferencesKey("advance_day")
+        val autoGoogleSyncEnabled = booleanPreferencesKey("auto_google_sync_enabled")
     }
 }

@@ -16,5 +16,6 @@ class SettingsRepository(private val dataStore: SettingsDataStore) {
     suspend fun updateBaseCurrency(currency: CurrencyCode) = dataStore.updateBaseCurrency(currency)
     suspend fun updateSalaryDay(day: Int) = dataStore.updateSalaryDay(day)
     suspend fun updateAdvanceDay(day: Int) = dataStore.updateAdvanceDay(day)
+    suspend fun updateAutoGoogleSyncEnabled(enabled: Boolean) = dataStore.updateAutoGoogleSyncEnabled(enabled)
     suspend fun replace(settings: AppSettings) = dataStore.replace(settings)
 }

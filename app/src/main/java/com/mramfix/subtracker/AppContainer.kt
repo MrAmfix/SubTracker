@@ -1,6 +1,8 @@
 package com.mramfix.subtracker
 
 import android.content.Context
+import com.mramfix.subtracker.cloudbackup.AutoSyncManager
+import com.mramfix.subtracker.cloudbackup.GoogleDriveBackupRepository
 import com.mramfix.subtracker.data.local.AppDatabase
 import com.mramfix.subtracker.data.remote.CbrApi
 import com.mramfix.subtracker.data.repository.CurrencyRepository
@@ -27,5 +29,7 @@ class AppContainer(context: Context) {
     val settingsRepository = SettingsRepository(SettingsDataStore(appContext))
     val currencyRepository = CurrencyRepository(database.exchangeRateDao(), cbrApi, json)
     val importExportRepository = ImportExportRepository(subscriptionRepository, settingsRepository)
+    val googleDriveBackupRepository = GoogleDriveBackupRepository(importExportRepository, json)
+    val autoSyncManager = AutoSyncManager(appContext, settingsRepository, googleDriveBackupRepository)
     val notificationScheduler = NotificationScheduler(appContext)
 }

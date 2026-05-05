@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mramfix.subtracker.SubTrackerApplication
+import com.mramfix.subtracker.cloudbackup.AutoSyncResult
 import com.mramfix.subtracker.domain.model.AppSettings
 import com.mramfix.subtracker.domain.model.CurrencyCode
 import com.mramfix.subtracker.domain.model.ExchangeRate
@@ -117,6 +118,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             container.subscriptionRepository.setActive(id, active)
             rescheduleNotifications()
+            autoSyncAfterChange()
         }
     }
 
@@ -125,6 +127,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             container.subscriptionRepository.delete(id)
             container.notificationScheduler.cancel(id)
             rescheduleNotifications()
+            autoSyncAfterChange()
+        }
+    }
+
+    private suspend fun autoSyncAfterChange() {
+        when (val result = container.autoSyncManager.syncIfEnabled()) {
+            AutoSyncResult.Success, null -> Unit
+            is AutoSyncResult.Error -> message.value = "Автосинхронизация не выполнена: ${result.message}"
         }
     }
 

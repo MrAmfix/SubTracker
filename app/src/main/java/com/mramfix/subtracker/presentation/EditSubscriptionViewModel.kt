@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.mramfix.subtracker.SubTrackerApplication
+import com.mramfix.subtracker.cloudbackup.AutoSyncResult
 import com.mramfix.subtracker.domain.model.BillingPeriodType
 import com.mramfix.subtracker.domain.model.BillingRule
 import com.mramfix.subtracker.domain.model.CurrencyCode
@@ -138,6 +139,15 @@ class EditSubscriptionViewModel(
                 container.settingsRepository.settings.first()
             )
             _state.update { it.copy(id = if (it.id == 0L) savedId else it.id) }
+            when (val syncResult = container.autoSyncManager.syncIfEnabled()) {
+                AutoSyncResult.Success, null -> Unit
+                is AutoSyncResult.Error -> {
+                    _state.update {
+                        it.copy(error = "Подписка сохранена, но автосинхронизация не выполнена: ${syncResult.message}")
+                    }
+                    return@launch
+                }
+            }
             _saved.emit(Unit)
         }
     }
