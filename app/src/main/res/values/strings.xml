@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">SubTracker</string>
+    <string name="notification_channel_payments">Subscription payments</string>
 </resources>
