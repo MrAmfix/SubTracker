@@ -4,14 +4,15 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import coil.imageLoader
 import com.mramfix.subtracker.SubTrackerApplication
-import com.mramfix.subtracker.cloudbackup.AutoSyncResult
 import com.mramfix.subtracker.domain.model.BillingPeriodType
 import com.mramfix.subtracker.domain.model.BillingRule
 import com.mramfix.subtracker.domain.model.CurrencyCode
 import com.mramfix.subtracker.domain.model.Subscription
 import com.mramfix.subtracker.domain.model.SubscriptionStatus
 import com.mramfix.subtracker.domain.usecase.NextPaymentCalculator
+import com.mramfix.subtracker.image.removeSubscriptionIconFromCache
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -43,7 +44,8 @@ class EditSubscriptionViewModel(
     application: Application,
     savedStateHandle: SavedStateHandle
 ) : AndroidViewModel(application) {
-    private val container = (application as SubTrackerApplication).container
+    private val app = application as SubTrackerApplication
+    private val container = app.container
     private val subscriptionId: Long = savedStateHandle["subscriptionId"] ?: 0L
     private val _state = MutableStateFlow(SubscriptionFormState(id = subscriptionId))
     val state: StateFlow<SubscriptionFormState> = _state.asStateFlow()
@@ -115,15 +117,15 @@ class EditSubscriptionViewModel(
                 return@launch
             }
             val now = System.currentTimeMillis()
-            val createdAt = if (form.id == 0L) now else {
-                container.subscriptionRepository.observeById(form.id).first()?.createdAtEpochMillis ?: now
-            }
+            val currentSubscription = if (form.id == 0L) null else container.subscriptionRepository.observeById(form.id).first()
+            val createdAt = currentSubscription?.createdAtEpochMillis ?: now
+            val nextIconUri = form.iconUri.trim().ifBlank { null }
             val upcomingDate = NextPaymentCalculator.upcomingFrom(date!!, LocalDate.now(), rule!!)
             val savedId = container.subscriptionRepository.upsert(
                 Subscription(
                     id = form.id,
                     name = form.name.trim(),
-                    iconUri = form.iconUri.trim().ifBlank { null },
+                    iconUri = nextIconUri,
                     description = form.description.trim().ifBlank { null },
                     cost = cost!!,
                     currency = form.currency,
@@ -134,20 +136,15 @@ class EditSubscriptionViewModel(
                     updatedAtEpochMillis = now
                 )
             )
+            if (currentSubscription?.iconUri != nextIconUri) {
+                app.imageLoader.removeSubscriptionIconFromCache(form.id, currentSubscription?.iconUri)
+            }
             container.notificationScheduler.rescheduleAll(
                 container.subscriptionRepository.getAll(),
                 container.settingsRepository.settings.first()
             )
             _state.update { it.copy(id = if (it.id == 0L) savedId else it.id) }
-            when (val syncResult = container.autoSyncManager.syncIfEnabled()) {
-                AutoSyncResult.Success, null -> Unit
-                is AutoSyncResult.Error -> {
-                    _state.update {
-                        it.copy(error = "Подписка сохранена, но автосинхронизация не выполнена: ${syncResult.message}")
-                    }
-                    return@launch
-                }
-            }
+            container.autoSyncManager.requestSyncIfEnabled()
             _saved.emit(Unit)
         }
     }
