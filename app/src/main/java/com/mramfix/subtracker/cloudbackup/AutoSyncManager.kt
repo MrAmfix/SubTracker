@@ -7,8 +7,17 @@ import com.google.android.gms.auth.UserRecoverableAuthException
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.mramfix.subtracker.data.repository.SettingsRepository
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.IOException
 
@@ -17,7 +26,33 @@ class AutoSyncManager(
     private val settingsRepository: SettingsRepository,
     private val googleDriveBackupRepository: GoogleDriveBackupRepository
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val syncMutex = Mutex()
+    private val _syncErrors = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val syncErrors: SharedFlow<String> = _syncErrors.asSharedFlow()
+
+    @Volatile
+    private var syncPending = false
+
     fun hasSignedInAccount(): Boolean = GoogleSignIn.getLastSignedInAccount(context) != null
+
+    fun requestSyncIfEnabled() {
+        scope.launch {
+            val settings = settingsRepository.settings.first()
+            if (!settings.autoGoogleSyncEnabled) return@launch
+            syncPending = true
+            if (syncMutex.isLocked) return@launch
+            syncMutex.withLock {
+                while (syncPending) {
+                    syncPending = false
+                    when (val result = exportWithRetry()) {
+                        AutoSyncResult.Success -> Unit
+                        is AutoSyncResult.Error -> _syncErrors.emit("Проблема с синхронизацией с Google Drive: ${result.message}")
+                    }
+                }
+            }
+        }
+    }
 
     suspend fun syncIfEnabled(): AutoSyncResult? {
         val settings = settingsRepository.settings.first()
@@ -71,9 +106,26 @@ class AutoSyncManager(
         }
     }
 
+    private suspend fun exportWithRetry(): AutoSyncResult {
+        var lastError: AutoSyncResult.Error? = null
+        repeat(MAX_AUTO_SYNC_ATTEMPTS) { attempt ->
+            when (val result = exportWithLastAccount()) {
+                AutoSyncResult.Success -> return AutoSyncResult.Success
+                is AutoSyncResult.Error -> lastError = result
+            }
+            if (attempt < MAX_AUTO_SYNC_ATTEMPTS - 1) delay(AUTO_SYNC_RETRY_DELAY_MILLIS)
+        }
+        return lastError ?: AutoSyncResult.Error("Не удалось сохранить резервную копию")
+    }
+
     private sealed class TokenResult {
         data class Success(val accessToken: String) : TokenResult()
         data class Error(val message: String) : TokenResult()
+    }
+
+    private companion object {
+        const val MAX_AUTO_SYNC_ATTEMPTS = 4
+        const val AUTO_SYNC_RETRY_DELAY_MILLIS = 5_000L
     }
 }
 

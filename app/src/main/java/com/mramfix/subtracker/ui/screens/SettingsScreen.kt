@@ -185,14 +185,14 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Default.FileDownload, contentDescription = null)
-                Text("Экспортировать JSON")
+                Text("Сохранить в JSON")
             }
             OutlinedButton(
                 onClick = { openDocument.launch(arrayOf("application/json", "text/*", "*/*")) },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Default.FileUpload, contentDescription = null)
-                Text("Импортировать JSON")
+                Text("Загрузить из JSON")
             }
             Button(
                 onClick = {
@@ -202,7 +202,7 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 GoogleFavicon()
-                Text("Экспорт через Google")
+                Text("Сохранить в Google")
             }
             OutlinedButton(
                 onClick = {
@@ -212,7 +212,7 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 GoogleFavicon()
-                Text("Импорт через Google")
+                Text("Загрузить из Google")
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -240,7 +240,7 @@ fun SettingsScreen(
             HorizontalDivider(modifier = Modifier.padding(top = 10.dp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
                 Text("О приложении", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text("Версия 1.0", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Версия 1.1.0", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(
                     onClick = { uriHandler.openUri("https://github.com/MrAmfix/SubTracker") },
                 ) {
