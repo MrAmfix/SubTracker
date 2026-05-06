@@ -5,6 +5,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.mramfix.subtracker.SubTrackerApplication
 import com.mramfix.subtracker.domain.usecase.CurrencyConverter
+import com.mramfix.subtracker.domain.usecase.NextPaymentCalculator
 import com.mramfix.subtracker.notifications.NotificationHelper
 import kotlinx.coroutines.flow.first
 import java.text.NumberFormat
@@ -27,7 +28,20 @@ class PaymentNotificationWorker(
 
         val settings = container.settingsRepository.settings.first()
         val rates = container.currencyRepository.getRates()
-        val paymentDate = LocalDate.ofEpochDay(subscription.nextPaymentEpochDay)
+        val storedPaymentDate = LocalDate.ofEpochDay(subscription.nextPaymentEpochDay)
+        val paymentDate = NextPaymentCalculator.upcomingFrom(
+            seedDate = storedPaymentDate,
+            today = LocalDate.now(),
+            rule = subscription.billingRule
+        )
+        if (paymentDate != storedPaymentDate) {
+            container.subscriptionRepository.upsert(
+                subscription.copy(
+                    nextPaymentEpochDay = paymentDate.toEpochDay(),
+                    updatedAtEpochMillis = System.currentTimeMillis()
+                )
+            )
+        }
         val originalPrice = formatMoney(subscription.cost, subscription.currency.name)
         val converted = CurrencyConverter.convert(
             amount = subscription.cost,
@@ -37,7 +51,7 @@ class PaymentNotificationWorker(
         )?.takeIf { settings.baseCurrency != subscription.currency }
             ?.let { " (~${formatMoney(it, settings.baseCurrency.name)})" }
             .orEmpty()
-        val text = "$originalPrice$converted · ${paymentDate.format(DateTimeFormatter.ISO_LOCAL_DATE)}"
+        val text = "$originalPrice$converted · ${paymentDate.format(DisplayDateFormatter)}"
         NotificationHelper.showPaymentNotification(
             applicationContext,
             subscription.id,
@@ -57,5 +71,6 @@ class PaymentNotificationWorker(
 
     companion object {
         const val KEY_SUBSCRIPTION_ID = "subscription_id"
+        private val DisplayDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
     }
 }

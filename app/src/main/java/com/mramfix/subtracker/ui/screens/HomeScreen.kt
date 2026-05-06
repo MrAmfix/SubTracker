@@ -1,5 +1,6 @@
 package com.mramfix.subtracker.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -56,9 +58,13 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.mramfix.subtracker.domain.model.SortMode
 import com.mramfix.subtracker.domain.model.SubscriptionStatus
+import com.mramfix.subtracker.image.subscriptionIconCacheKey
 import com.mramfix.subtracker.presentation.HomeViewModel
+import com.mramfix.subtracker.presentation.PaymentCountdownUrgency
 import com.mramfix.subtracker.presentation.HomeStatsSummaryUi
 import com.mramfix.subtracker.presentation.SubscriptionListItemUi
+import com.mramfix.subtracker.presentation.isPaymentTodayOrTomorrow
+import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -191,9 +197,10 @@ private fun SortRow(selected: SortMode, onSelected: (SortMode) -> Unit) {
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         SortChip("Дата оплаты", SortMode.NEXT_PAYMENT, selected, onSelected)
+        SortChip("День оплаты", SortMode.PAYMENT_DAY, selected, onSelected)
         SortChip("Стоимость", SortMode.COST, selected, onSelected)
         SortChip("Алфавит", SortMode.NAME, selected, onSelected)
     }
@@ -216,11 +223,20 @@ private fun SubscriptionCard(
     onActiveChange: (Boolean) -> Unit
 ) {
     val subscription = item.subscription
+    val isDueTodayOrTomorrow = isPaymentTodayOrTomorrow(
+        paymentDate = LocalDate.ofEpochDay(subscription.nextPaymentEpochDay),
+        today = LocalDate.now()
+    )
     Card(
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
         ),
+        border = if (isDueTodayOrTomorrow) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+        } else {
+            null
+        },
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -231,6 +247,7 @@ private fun SubscriptionCard(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             SubscriptionIcon(
+                id = subscription.id,
                 name = subscription.name,
                 iconUri = subscription.iconUri,
                 modifier = Modifier.size(44.dp)
@@ -253,6 +270,15 @@ private fun SubscriptionCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                item.paymentCountdown?.let { countdown ->
+                    Text(
+                        text = countdown.text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = countdown.urgency.color(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 subscription.description?.takeIf { it.isNotBlank() }?.let {
                     Text(
                         it,
@@ -305,6 +331,7 @@ private fun SubscriptionCard(
 
 @Composable
 private fun SubscriptionIcon(
+    id: Long,
     name: String,
     iconUri: String?,
     modifier: Modifier = Modifier
@@ -315,10 +342,12 @@ private fun SubscriptionIcon(
         return
     }
     val context = LocalContext.current
+    val cacheKey = remember(id, cleanUri) { subscriptionIconCacheKey(id, cleanUri) }
     SubcomposeAsyncImage(
         model = ImageRequest.Builder(context)
             .data(cleanUri)
-            .crossfade(true)
+            .memoryCacheKey(cacheKey)
+            .diskCacheKey(cacheKey)
             .build(),
         contentDescription = "Иконка подписки",
         modifier = modifier.clip(CircleShape),
@@ -326,6 +355,15 @@ private fun SubscriptionIcon(
         loading = { InitialAvatar(name = name, modifier = Modifier.fillMaxSize()) },
         error = { InitialAvatar(name = name, modifier = Modifier.fillMaxSize()) }
     )
+}
+
+@Composable
+private fun PaymentCountdownUrgency.color(): Color {
+    return when (this) {
+        PaymentCountdownUrgency.RED -> MaterialTheme.colorScheme.error
+        PaymentCountdownUrgency.ORANGE -> Color(0xFFE8710A)
+        PaymentCountdownUrgency.YELLOW -> Color(0xFFB68A00)
+    }
 }
 
 @Composable
