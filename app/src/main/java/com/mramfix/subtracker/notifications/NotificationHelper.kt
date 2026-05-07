@@ -54,8 +54,26 @@ object NotificationHelper {
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(pendingIntent)
+            .addAction(
+                R.drawable.ic_launcher_foreground,
+                context.getString(R.string.notification_action_paid),
+                markPaidPendingIntent(context, id)
+            )
             .setAutoCancel(true)
             .build()
         NotificationManagerCompat.from(context).notify(id.toInt(), notification)
+    }
+
+    private fun markPaidPendingIntent(context: Context, id: Long): PendingIntent {
+        val intent = Intent(context, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionReceiver.ACTION_MARK_PAID
+            putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, id.toInt())
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            id.toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
     }
 }
